@@ -4,7 +4,7 @@ import {
   toBlobURL
 } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
 
-const $ = (selector) => document.querySelector(selector);
+const $ = (s) => document.querySelector(s);
 
 const input = $("#videoInput");
 const result = $("#result");
@@ -40,7 +40,6 @@ const ffmpeg = new FFmpeg();
 let currentFile = null;
 let inputUrl = null;
 let outputUrl = null;
-let metadata = {};
 
 function formatBytes(bytes) {
   const units = ["B", "KB", "MB", "GB"];
@@ -58,49 +57,88 @@ function formatBytes(bytes) {
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "—";
 
-  const minutes = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
+  const min = Math.floor(seconds / 60);
+  const sec = Math.floor(seconds % 60);
 
-  return `${minutes}:${String(secs).padStart(2, "0")}`;
+  return `${min}:${String(sec).padStart(2, "0")}`;
 }
 
-function setProgress(value, text) {
-  const safeValue = Math.max(0, Math.min(100, value));
+function setProgress(value, message) {
+  const safe = Math.max(0, Math.min(100, value));
 
-  progress.value = safeValue;
-  progressPct.textContent = `${Math.round(safeValue)}%`;
-  progressText.textContent = text;
+  progress.value = safe;
+  progressPct.textContent = `${Math.round(safe)}%`;
+  progressText.textContent = message;
 }
+
+function showStatus(message) {
+  status.textContent = message;
+}
+
+/* -----------------------------
+   LOGS REALES DE FFMPEG
+----------------------------- */
+
+ffmpeg.on("log", ({ message }) => {
+  console.log("[FFmpeg]", message);
+
+  if (
+    message.includes("Input #0") ||
+    message.includes("Output #0") ||
+    message.includes("Stream mapping") ||
+    message.includes("frame=")
+  ) {
+    showStatus(message);
+  }
+});
+
+/* -----------------------------
+   PROGRESO DE CODIFICACIÓN
+----------------------------- */
+
+ffmpeg.on("progress", ({ progress: value }) => {
+  const percent = 10 + value * 85;
+
+  setProgress(
+    percent,
+    "Comprimiendo video…"
+  );
+});
+
+/* -----------------------------
+   PERFIL
+----------------------------- */
 
 function getProfile(width, height) {
   const vertical = height > width;
-  const is4K = Math.max(width, height) >= 2160;
+  const fourK = Math.max(width, height) >= 2160;
 
-  if (vertical && is4K) {
+  if (vertical && fourK) {
     return [
       "TikTok vertical · 4K",
-      "Tu video ya es vertical y tiene resolución 4K o superior."
+      "Video vertical en resolución 4K o superior."
     ];
   }
 
   if (vertical) {
     return [
       "TikTok vertical",
-      "Tu video ya está en formato vertical."
+      "Video vertical listo para optimización."
     ];
   }
 
   return [
     "TikTok · horizontal",
-    "El video es horizontal. Esta versión no recorta automáticamente."
+    "Video horizontal. No se recortará automáticamente."
   ];
 }
 
-/* --------------------------------
-   VIDEO SELECCIONADO
--------------------------------- */
+/* -----------------------------
+   SELECCIÓN DE VIDEO
+----------------------------- */
 
 input.addEventListener("change", () => {
+
   const file = input.files?.[0];
 
   if (!file) return;
@@ -121,20 +159,15 @@ input.addEventListener("change", () => {
 
   prepareBtn.disabled = true;
 
-  status.textContent = "Analizando video…";
+  showStatus("Analizando video…");
 
   preview.onloadedmetadata = () => {
-    metadata = {
-      width: preview.videoWidth,
-      height: preview.videoHeight,
-      duration: preview.duration
-    };
 
     resolution.textContent =
-      `${metadata.width} × ${metadata.height}`;
+      `${preview.videoWidth} × ${preview.videoHeight}`;
 
     duration.textContent =
-      formatTime(metadata.duration);
+      formatTime(preview.duration);
 
     size.textContent =
       formatBytes(file.size);
@@ -143,83 +176,80 @@ input.addEventListener("change", () => {
       "No disponible";
 
     const [name, description] =
-      getProfile(metadata.width, metadata.height);
+      getProfile(
+        preview.videoWidth,
+        preview.videoHeight
+      );
 
     profileName.textContent = name;
 
     profileText.textContent =
-      `${description} El navegador no expone de forma fiable los FPS exactos en todos los dispositivos.`;
+      `${description} Los FPS exactos no están disponibles de forma fiable mediante el elemento de video del navegador.`;
 
     originalSize.textContent =
       formatBytes(file.size);
 
-    status.textContent =
-      "Video listo. El archivo permanece en tu dispositivo.";
+    showStatus(
+      "Video listo. Pulsa Optimizar video."
+    );
 
     prepareBtn.disabled = false;
   };
 });
 
-/* --------------------------------
-   PROGRESO FFmpeg
--------------------------------- */
+/* -----------------------------
+   CARGAR FFMPEG
+----------------------------- */
 
-ffmpeg.on("progress", ({ progress: value }) => {
-  setProgress(
-    5 + value * 90,
-    "Comprimiendo video…"
-  );
-});
-
-/* --------------------------------
-   CARGAR FFmpeg
--------------------------------- */
+let ffmpegLoaded = false;
 
 async function loadFFmpeg() {
-  if (ffmpeg.loaded) {
+
+  if (ffmpegLoaded) {
     return;
   }
 
   setProgress(
     1,
-    "Conectando con el motor de video…"
+    "Preparando motor de video…"
   );
 
-  status.textContent =
-    "Preparando FFmpeg WebAssembly. La primera carga puede tardar.";
+  showStatus(
+    "Descargando FFmpeg (~31 MB). Esta carga ocurre una sola vez."
+  );
 
-  /*
-    Usamos un CDN alternativo para evitar que una
-    descarga bloqueada deje el progreso congelado.
-  */
-
-  const coreBase =
-    "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+  const baseURL =
+    "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 
   try {
+
     setProgress(
       2,
-      "Descargando motor de video…"
+      "Descargando motor FFmpeg…"
     );
 
     const coreURL = await toBlobURL(
-      `${coreBase}/ffmpeg-core.js`,
+      `${baseURL}/ffmpeg-core.js`,
       "text/javascript"
     );
 
     setProgress(
-      5,
-      "Descargando componentes de video…"
+      4,
+      "Descargando componente WebAssembly…"
     );
 
     const wasmURL = await toBlobURL(
-      `${coreBase}/ffmpeg-core.wasm`,
+      `${baseURL}/ffmpeg-core.wasm`,
       "application/wasm"
     );
 
     setProgress(
-      8,
-      "Iniciando motor…"
+      7,
+      "Inicializando FFmpeg…"
+    );
+
+    showStatus(
+      "Inicializando motor de video…"
     );
 
     await ffmpeg.load({
@@ -227,36 +257,37 @@ async function loadFFmpeg() {
       wasmURL
     });
 
+    ffmpegLoaded = true;
+
     setProgress(
       10,
-      "Motor de video listo."
+      "Motor listo."
     );
 
-    status.textContent =
-      "FFmpeg está listo. Ahora comenzará la compresión.";
+    showStatus(
+      "✅ FFmpeg está listo. Comenzando procesamiento."
+    );
 
   } catch (error) {
 
     console.error(
-      "Error cargando FFmpeg:",
+      "FFmpeg load error:",
       error
     );
 
     throw new Error(
-      "No se pudo cargar FFmpeg WebAssembly. Revisa la conexión a Internet e inténtalo nuevamente."
+      `No se pudo iniciar FFmpeg: ${error.message || error}`
     );
   }
 }
 
-/* --------------------------------
-   OPTIMIZAR
--------------------------------- */
+/* -----------------------------
+   OPTIMIZAR VIDEO
+----------------------------- */
 
 prepareBtn.addEventListener("click", async () => {
 
-  if (!currentFile) {
-    return;
-  }
+  if (!currentFile) return;
 
   prepareBtn.disabled = true;
 
@@ -268,12 +299,13 @@ prepareBtn.addEventListener("click", async () => {
     "Preparando…"
   );
 
-  status.textContent =
-    "Iniciando procesamiento local…";
-
   try {
 
+    /* 1. CARGAR MOTOR */
+
     await loadFFmpeg();
+
+    /* 2. CARGAR VIDEO */
 
     const extension =
       currentFile.name
@@ -289,7 +321,7 @@ prepareBtn.addEventListener("click", async () => {
       "tiktok-optimized.mp4";
 
     setProgress(
-      12,
+      11,
       "Cargando video en memoria…"
     );
 
@@ -297,6 +329,8 @@ prepareBtn.addEventListener("click", async () => {
       inputName,
       await fetchFile(currentFile)
     );
+
+    /* 3. CONFIGURACIÓN */
 
     const args = [
       "-i",
@@ -331,25 +365,34 @@ prepareBtn.addEventListener("click", async () => {
       );
     }
 
-    args.push(outputName);
+    args.push(
+      outputName
+    );
 
-    status.textContent =
-      "Comprimiendo localmente. En videos 4K/60 FPS puede tardar bastante.";
+    /* 4. CODIFICAR */
 
     setProgress(
       15,
       "Comprimiendo video…"
     );
 
+    showStatus(
+      "FFmpeg está codificando el video. No cierres esta página."
+    );
+
     await ffmpeg.exec(args);
+
+    /* 5. LEER RESULTADO */
 
     setProgress(
       96,
-      "Preparando archivo final…"
+      "Preparando resultado…"
     );
 
     const data =
-      await ffmpeg.readFile(outputName);
+      await ffmpeg.readFile(
+        outputName
+      );
 
     const blob =
       new Blob(
@@ -370,34 +413,35 @@ prepareBtn.addEventListener("click", async () => {
     downloadBtn.href =
       outputUrl;
 
+    outputSize.textContent =
+      formatBytes(blob.size);
+
+    const saving =
+      ((currentFile.size - blob.size) /
+      currentFile.size) * 100;
+
+    savings.textContent =
+      saving > 0
+        ? `${saving.toFixed(1)}%`
+        : "0%";
+
     downloadArea.classList.remove(
       "hidden"
     );
 
-    outputSize.textContent =
-      formatBytes(blob.size);
-
-    const saved =
-      ((currentFile.size - blob.size) /
-        currentFile.size) * 100;
-
-    savings.textContent =
-      saved > 0
-        ? `${saved.toFixed(1)}%`
-        : "0%";
-
     setProgress(
       100,
-      "Optimización terminada."
+      "¡Optimización terminada!"
     );
 
-    status.textContent =
-      "Listo. El video optimizado se creó en tu dispositivo.";
+    showStatus(
+      "✅ Video optimizado correctamente."
+    );
 
   } catch (error) {
 
     console.error(
-      "Error procesando video:",
+      "Processing error:",
       error
     );
 
@@ -406,8 +450,9 @@ prepareBtn.addEventListener("click", async () => {
       "Error"
     );
 
-    status.textContent =
-      `No se pudo procesar el video: ${error.message}`;
+    showStatus(
+      `❌ ${error.message || "No se pudo procesar el video."}`
+    );
 
   } finally {
 
