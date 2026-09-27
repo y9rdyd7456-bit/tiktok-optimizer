@@ -1,55 +1,30 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080808">
-  <title>TikTok Optimizer — 4K 60 FPS</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <main class="app">
-    <header>
-      <div class="brand">TikTok <span>Optimizer</span></div>
-      <p>Prepara tus videos 4K/60 FPS con la menor pérdida posible.</p>
-    </header>
+TikTok Optimizer
+Optimiza tus videos para TikTok directamente en tu dispositivo.
+🔒 El video no se sube a un servidor.
+＋ Seleccionar video MP4, MOV u otros formatos compatibles
 
-    <section class="card">
-      <label class="drop" for="videoInput">
-        <span class="icon">＋</span>
-        <strong>Seleccionar video</strong>
-        <small>MP4, MOV u otros formatos compatibles con tu navegador</small>
-      </label>
-      <input id="videoInput" type="file" accept="video/*">
-    </section>
+Video original
+Resolución—
+FPS—
+Duración—
+Tamaño—
+Optimización
+Calidad
+        Muy alta — CRF 18
+        Alta — CRF 20
+        Equilibrada — CRF 23
+       FPS de salida
+        Mantener FPS de origen
+        60 FPS
+        30 FPS
+      
+Perfil TikTok
+Analizando…
+Optimizar video
+Preparando… 0%
 
-    <section id="result" class="card hidden">
-      <div class="video-wrap">
-        <video id="preview" controls playsinline></video>
-      </div>
-
-      <h2>Información del video</h2>
-      <div class="grid">
-        <div><span>Resolución</span><b id="resolution">—</b></div>
-        <div><span>FPS</span><b id="fps">—</b></div>
-        <div><span>Duración</span><b id="duration">—</b></div>
-        <div><span>Tamaño</span><b id="size">—</b></div>
-      </div>
-
-      <h2>Perfil recomendado</h2>
-      <div class="profile">
-        <b id="profileName">TikTok 4K · 60 FPS</b>
-        <p id="profileText">Analizando…</p>
-      </div>
-
-      <button id="prepareBtn">Preparar para TikTok</button>
-      <div id="status" class="status"></div>
-    </section>
-
-    <footer>
-      <p>Prototipo v0.1 · El video no se sube a un servidor en esta versión.</p>
-    </footer>
-  </main>
-  <script src="app.js"></script>
-</body>
-</html>
+Original—
+Optimizado—
+Ahorro—
+Descargar video optimizado
+Prototipo v0.2 · Procesamiento local con FFmpeg WebAssembly.
